@@ -11,10 +11,10 @@ import 'openzeppelin-solidity/contracts/math/SafeMath.sol';
 // TODO:
 // [X] Set the fee account
 // [X] Deposit Ether
-// [ ] Withdraw Ether
+// [X] Withdraw Ether
 // [X] Deposit Tokens
-// [ ] Withdraw Tokens
-// [ ] Check balances
+// [X] Withdraw Tokens
+// [X] Check balances
 // [ ] Make order
 // [ ] Cancel order
 // [ ] Fill order
@@ -37,6 +37,7 @@ contract Exchange {
 
   // Events
   event Deposit(address _token, address _user, uint256 _amount, uint256 _balance);
+  event Withdraw(address _token, address _user, uint256 _amount, uint256 _balance);
 
 
   constructor (address _feeAccount, uint256 _feePercent) public {
@@ -55,12 +56,38 @@ contract Exchange {
 
   }
 
+  function withdrawEther(uint256 _amount) public {
+    require(tokens[ETHER][msg.sender] >= _amount);
+    tokens[ETHER][msg.sender] = tokens[ETHER][msg.sender].sub(_amount);
+    // msg.sender.transfer(_amount);
+    // This forwards all available gas. Be sure to check the return value!
+    (bool success, ) = msg.sender.call.value(_amount)("");
+    require(success, "Transfer failed.");
+    emit Withdraw(ETHER, msg.sender, _amount, tokens[ETHER][msg.sender]);
+
+  }
+
   function depositToken(address _token, uint256 _amount) public {
     require(_token != ETHER);
     require(Token(_token).transferFrom(msg.sender, address(this), _amount));
     tokens[_token][msg.sender] = tokens[_token][msg.sender].add(_amount);
     emit Deposit(_token, msg.sender, _amount, tokens[_token][msg.sender]);
   }
+
+  function withdrawToken(address _token, uint256 _amount) public {
+    require(_token != ETHER);
+    require(tokens[_token][msg.sender] >= _amount);
+    tokens[_token][msg.sender] = tokens[_token][msg.sender].sub(_amount);
+    require(Token(_token).transfer(msg.sender, _amount));
+    emit Withdraw(_token, msg.sender, _amount, tokens[_token][msg.sender]);
+
+  }
+
+  function balanceOf(address _token, address _user) view public returns (uint256) {
+    return tokens[_token][_user];
+  }
+
+
 
 
 }
