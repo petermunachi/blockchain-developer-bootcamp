@@ -45,7 +45,7 @@ contract Exchange {
   }
 
   // Fallback: reverts if Ether is sent to this smart contract by mistake
-  fallback () external {
+  function () external {
     revert();
   }
 
