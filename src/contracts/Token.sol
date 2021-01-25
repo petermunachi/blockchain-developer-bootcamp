@@ -57,8 +57,6 @@ contract Token {
     return true;
   }
 
-
-
   modifier validateAddressAndValue(address _addr, uint256 _value) {
     require(_addr != address(0), "Invalid ethereum address");
     require(_value >= 0);
