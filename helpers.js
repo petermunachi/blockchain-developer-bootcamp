@@ -6,4 +6,4 @@ export const ether = (n) => {
 }
 
 // Same as Ether
-export const tokens = (n) => ether(n);
+export const tokens = (n) => ether(n);  
