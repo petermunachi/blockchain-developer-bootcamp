@@ -1,20 +1,30 @@
-import React,{ useEffect, useState } from 'react';
+import React,{ useEffect, useState, useCallback, useMemo } from 'react';
+import { bindActionCreators } from 'redux'
+import { useDispatch } from 'react-redux'
 import './App.css';
 import getWeb3 from "./getWeb3";
 import Token from '../abis/Token.json';
+import { loadWeb3 } from '../redux/interactive';
+import { web3Loaded } from '../redux/actions/web3Action';
 
 
-function App() {
+function App(props) {
 
-  const [networkType, setNetworkType] = useState(null)
+  const dispatch = useDispatch();
+
+  const incrementCounter = useCallback(
+    () => dispatch(web3Loaded()),
+    [dispatch]
+  )
+
 
   useEffect(() => {
-   loadBlockchainData()
+   loadBlockchainData(props.dispatch)
   }, [networkType]);
 
-  const loadBlockchainData = async () => {
+  const loadBlockchainData = async (dispatch) => {
     // Get network provider and web3 instance.
-    const web3 = await getWeb3();
+    const web3 = loadWeb3(dispatch);
     const networkType = await web3.eth.net.getNetworkType();
     const networkId = await web3.eth.net.getId();
     const accounts = await web3.eth.getAccounts();
