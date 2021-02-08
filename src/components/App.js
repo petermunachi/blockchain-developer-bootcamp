@@ -1,125 +1,50 @@
-import React,{ useEffect, useState, useCallback, useMemo } from 'react';
-import { bindActionCreators } from 'redux'
-import { useDispatch } from 'react-redux'
+import React, { Component } from 'react';
 import './App.css';
-import getWeb3 from "./getWeb3";
-import Token from '../abis/Token.json';
-import { loadWeb3 } from '../redux/interactive';
-import { web3Loaded } from '../redux/actions/web3Action';
-
-
-function App(props) {
-
-  const dispatch = useDispatch();
-
-  const incrementCounter = useCallback(
-    () => dispatch(web3Loaded()),
-    [dispatch]
-  )
-
-
-  useEffect(() => {
-   loadBlockchainData(props.dispatch)
-  }, [networkType]);
-
-  const loadBlockchainData = async (dispatch) => {
-    // Get network provider and web3 instance.
-    const web3 = loadWeb3(dispatch);
-    const networkType = await web3.eth.net.getNetworkType();
-    const networkId = await web3.eth.net.getId();
-    const accounts = await web3.eth.getAccounts();
-    const token = new web3.eth.Contract(Token.abi, Token.networks[networkId].address);
-    const totalSupply = await token.methods.totalSupply().call();
-    console.log('totalSupply', totalSupply);
+import { connect } from 'react-redux';
+import {
+  loadWeb3,
+  loadAccount,
+  loadToken,
+  loadExchange
+} from '../store/interactions';
+import { contractsLoadedSelector } from '../store/selectors';
+import Navbar from './Navbar';
+import Content from './Content';
+class App extends Component {
+  componentWillMount() {
+    this.loadBlockchainData(this.props.dispatch)
   }
-  return (
-    <div>
-      <nav className="navbar navbar-expand-lg navbar-dark bg-primary">
-        <a className="navbar-brand" href="/#">Navbar</a>
-        <button className="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarNavDropdown" aria-controls="navbarNavDropdown" aria-expanded="false" aria-label="Toggle navigation">
-          <span className="navbar-toggler-icon"></span>
-        </button>
-        <div className="collapse navbar-collapse" id="navbarNavDropdown">
-          <ul className="navbar-nav">
-            <li className="nav-item">
-              <a className="nav-link" href="/#">Link 1</a>
-            </li>
-            <li className="nav-item">
-              <a className="nav-link" href="/#">Link 2</a>
-            </li>
-            <li className="nav-item">
-              <a className="nav-link" href="/#">Link 3</a>
-            </li>
-          </ul>
-        </div>
-      </nav>
-      <div className="content">
-        <div className="vertical-split">
-          <div className="card bg-dark text-white">
-            <div className="card-header">
-              Card Title
-            </div>
-            <div className="card-body">
-              <p className="card-text">Some quick example text to build on the card title and make up the bulk of the card's content.</p>
-              <a href="/#" className="card-link">Card link</a>
-            </div>
-          </div>
-          <div className="card bg-dark text-white">
-            <div className="card-header">
-              Card Title
-            </div>
-            <div className="card-body">
-              <p className="card-text">Some quick example text to build on the card title and make up the bulk of the card's content.</p>
-              <a href="/#" className="card-link">Card link</a>
-            </div>
-          </div>
-        </div>
-        <div className="vertical">
-          <div className="card bg-dark text-white">
-            <div className="card-header">
-              Card Title
-            </div>
-            <div className="card-body">
-              <p className="card-text">Some quick example text to build on the card title and make up the bulk of the card's content.</p>
-              <a href="/#" className="card-link">Card link</a>
-            </div>
-          </div>
-        </div>
-        <div className="vertical-split">
-          <div className="card bg-dark text-white">
-            <div className="card-header">
-              Card Title
-            </div>
-            <div className="card-body">
-              <p className="card-text">Some quick example text to build on the card title and make up the bulk of the card's content.</p>
-              <a href="/#" className="card-link">Card link</a>
-            </div>
-          </div>
-          <div className="card bg-dark text-white">
-            <div className="card-header">
-              Card Title
-            </div>
-            <div className="card-body">
-              <p className="card-text">Some quick example text to build on the card title and make up the bulk of the card's content.</p>
-              <a href="/#" className="card-link">Card link</a>
-            </div>
-          </div>
-        </div>
-        <div className="vertical">
-          <div className="card bg-dark text-white">
-            <div className="card-header">
-              Card Title
-            </div>
-            <div className="card-body">
-              <p className="card-text">Some quick example text to build on the card title and make up the bulk of the card's content.</p>
-              <a href="/#" className="card-link">Card link</a>
-            </div>
-          </div>
-        </div>
+
+  async loadBlockchainData(dispatch) {
+    const web3 = await loadWeb3(dispatch)
+    const networkId = await web3.eth.net.getId()
+    await loadAccount(web3, dispatch)
+    const token = await loadToken(web3, networkId, dispatch)
+    if(!token) {
+      window.alert('Token smart contract not deployed to the current network. Please select another network with Metamask.');
+      return;
+    }
+    const exchange = await loadExchange(web3, networkId, dispatch)
+    if(!exchange) {
+      window.alert('Exchange smart contract not deployed to the current network. Please select another network with Metamask.');
+      return;
+    }
+  }
+
+  render() {
+    return (
+      <div>
+        <Navbar />
+        { this.props.contractsLoaded ? <Content /> : <div className="content"></div> }
       </div>
-    </div>
-    
-  );
+    );
+  }
 }
 
-export default App;
+function mapStateToProps(state) {
+  return {
+    contractsLoaded: contractsLoadedSelector(state)
+  }
+}
+
+export default connect(mapStateToProps)(App);
