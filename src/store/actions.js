@@ -28,3 +28,25 @@ export function exchangeLoaded(contract) {
     contract
   }
 }
+
+
+export function cancelledOrdersLoaded(cancelledOrders) {
+  return {
+    type: 'CANCELLED_ORDER_LOADED',
+    cancelledOrders
+  }
+}
+
+export function filledOrdersLoaded(filledOrders) {
+  return {
+    type: 'FILLED_ORDER_LOADED',
+    filledOrders
+  }
+}
+export function allOrdersLoaded(allOrders) {
+  return {
+    type: 'ALL_ORDER_LOADED',
+    allOrders
+  }
+}
+
