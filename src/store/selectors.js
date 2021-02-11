@@ -1,4 +1,4 @@
-import { get } from 'lodash';
+import { get, reject, groupBy } from 'lodash';
 import moment from 'moment';
 import { createSelector } from 'reselect';
 import { ether, tokens, ETHER_ADDRESS, GREEN, RED } from "../helpers/helpers";
@@ -24,6 +24,19 @@ export const contractsLoadedSelector = createSelector(
   (tl, el) => (tl && el)
 )
 
+// All orders
+const allOrdersLoaded = state => get(state,'exchange.allOrders.loaded', false);
+const allOrders = state => get(state,'exchange.allOrders.data', []);
+
+// Cancelled orders
+const cancelledOrdersLoaded = state => get(state,'exchange.cancelledOrders.loaded', false);
+export const cancelledOrdersLoadedSelector = createSelector(cancelledOrdersLoaded, loaded => loaded)
+
+const cancelledOrders = state => get(state,'exchange.cancelledOrders.data', []);
+export const cancelledOrdersSelector = createSelector(cancelledOrders,  o => o)
+
+
+// Filled orders
 const filledOrdersLoaded = state => get(state,'exchange.filledOrders.loaded', false);
 export const filledOrdersLoadedSelector = createSelector(filledOrdersLoaded, loaded => loaded)
 
@@ -42,70 +55,134 @@ export const filledOrdersSelector = createSelector(
 
     return orders;
   
+  }
+)
+
+const decorateFilledOrders = (orders)=>{
+  // Track previous order to compare history
+  let previousOrder = orders[0];
+  return(
+    orders.map((order)=> {
+      order = decorateOrder(order);
+      order = decorateFilledOrder(order, previousOrder);
+      previousOrder = order // Update the previous order once it's decorated
+      return order;
+    })
+  )
+}
+
+const decorateOrder = (order)=>{
+  let etherAmount;
+  let tokenAmount;
+
+  if (order.tokenGive === ETHER_ADDRESS) {
+    etherAmount = order.amountGive;
+    tokenAmount = order.amountGet;
+  } else {
+    etherAmount = order.amountGet;
+    tokenAmount = order.amountGive;
+  }
+
+  // Calculate token price to 5 decimal places
+  const precision = 100000;
+  let tokenPrice = (etherAmount / tokenAmount);
+  tokenPrice = Math.round(tokenPrice * precision) / precision;
+
+  return ({
+    ...order,
+    etherAmount: ether(etherAmount),
+    tokenAmount: tokens(tokenAmount),
+    tokenPrice,
+    formattedTimestamp: moment.unix(order.timestamp).format('h:mm:ss a M/D')
+  })
+}
+
+const decorateFilledOrder = (order, previousOrder)=>{
+  return({
+    ...order,
+    tokenPriceClass: tokenPriceClass(order.tokenPrice, order.id, previousOrder)
+  })
+}
+
+const tokenPriceClass = (tokenPrice, orderId, previousOrder)=>{
+
+  // Show green price if only one order exist
+  if (previousOrder.id === orderId) {
+    return GREEN
+  }
+
+  // Show green price if order price higher than previous order
+  // Show red price if order price lower than previous order
+  if (previousOrder.tokenPrice <= tokenPrice) {
+    return GREEN
+  } else {
+    return RED
+  }
+}
+
+const openOrders = state => {
+  const all = allOrders(state);
+  const filled = filledOrders(state);
+  const cancelled = cancelledOrders(state);
+
+  const openOrders = reject(all, (order)=> {
+    const orderFilled = filled.some((a )=> a.id === order.id)
+    const orderCancelled = cancelled.some((a )=> a.id === order.id)
+    return(orderFilled || orderCancelled)
   })
 
-  const decorateFilledOrders = (orders)=>{
-    // Track previous order to compare history
-    let previousOrder = orders[0];
-    return(
-      orders.map((order)=> {
-        order = decorateOrder(order);
-        order = decorateFilledOrder(order, previousOrder);
-        previousOrder = order // Update the previous order once it's decorated
-        return order;
-      })
-    )
-  }
+  return openOrders;
+}
 
-  const decorateOrder = (order)=>{
-    let etherAmount;
-    let tokenAmount;
+const orderBookLoaded = state => cancelledOrdersLoaded(state) && filledOrdersLoaded(state) && allOrdersLoaded(state)
+export const orderBookLoadedSelector = createSelector(orderBookLoaded, loaded => loaded)
 
-    if (order.tokenGive === ETHER_ADDRESS) {
-      etherAmount = order.amountGive;
-      tokenAmount = order.amountGet;
-    } else {
-      etherAmount = order.amountGet;
-      tokenAmount = order.amountGive;
+// Create the order book
+export const orderBookSelector = createSelector(
+  openOrders,
+  (orders) => {
+    // Decorate orders
+    orders = decorateOrderBookOrders(orders)
+    // Group orders by "OrderType"
+    orders = groupBy(orders, 'orderType');
+
+    // Fetch buy orders
+    const buyOrders = get(orders, 'buy', []);
+    // Sort buy orders by token price
+    orders = {
+      ...orders,
+      buyOrders: buyOrders.sort((a, b) => b.tokenPrice - a.tokenPrice)
     }
+    // Fetch sell orders
+    const sellOrders = get(orders, 'sell', []);
+    // Sort buy orders by token price
+    orders = {
+      ...orders,
+      sellOrders: sellOrders.sort((a, b) => b.tokenPrice - a.tokenPrice)
+    }
+    return orders;
+  }
+)
 
-    // Calculate token price to 5 decimal places
-    const precision = 100000;
-    let tokenPrice = (etherAmount / tokenAmount);
-    tokenPrice = Math.round(tokenPrice * precision) / precision;
 
-    return ({
-      ...order,
-      etherAmount: ether(etherAmount),
-      tokenAmount: tokens(tokenAmount),
-      tokenPrice,
-      formattedTimestamp: moment.unix(order.timestamp).format('h:mm:ss a M/D')
+const decorateOrderBookOrders = (orders) => {
+  return (
+    orders.map((order) => {
+      order = decorateOrder(order);
+      // Decorate order book order...
+      order = decorateOrderBookOrder(order);
+     
+      return (order);
     })
-  }
+  )
+}
 
-  const decorateFilledOrder = (order, previousOrder)=>{
-    return({
-      ...order,
-      tokenPriceClass: tokenPriceClass(order.tokenPrice, order.id, previousOrder)
-    })
-  }
-
-  const tokenPriceClass = (tokenPrice, orderId, previousOrder)=>{
-
-    // Show green price if only one order exist
-    if (previousOrder.id === orderId) {
-      return GREEN
-    }
-
-    // Show green price if order price higher than previous order
-    // Show red price if order price lower than previous order
-    if (previousOrder.tokenPrice <= tokenPrice) {
-      return GREEN
-    } else {
-      return RED
-    }
-  }
-
-
-
-
+const decorateOrderBookOrder = (order) => {
+  const orderType = order.tokenGive === ETHER_ADDRESS ? 'buy' : 'sell';
+  return ({
+    ...order,
+    orderType,
+    orderTypeClass: (orderType === 'buy' ? GREEN : RED),
+    orderFillClass: orderType === 'buy' ? 'sell' : 'buy'
+  })
+}
